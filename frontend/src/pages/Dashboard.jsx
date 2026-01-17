@@ -241,20 +241,25 @@ export default function Dashboard({ user, setUser }) {
   };
 
   // Filter map friends
-  const filteredMapFriends = mapFriends.filter(friend => {
+244|  const filteredMapFriends = mapFriends.filter(friend => {
     if (filter === 'all') return true;
     if (filter === 'active') return friend.marker_type === 'active';
     if (filter === 'competent') return friend.marker_type === 'competent';
     return true;
   });
 
+  // Filter imported friends
+  const filteredImportedFriends = filter === 'imported' ? importedFriends : 
+    (filter === 'all' ? importedFriends : []);
+
   const sidebarItems = [
-    { id: 'map', icon: Map, label: 'Map' },
+    { id: 'map', icon: Map, label: 'Mappa' },
     { id: 'travel', icon: Plane, label: 'Travel Mode' },
-    { id: 'friends', icon: Users, label: 'Friends' },
+    { id: 'friends', icon: Users, label: 'Amici' },
+    { id: 'import', icon: Upload, label: 'Importa CSV' },
     { id: 'meetups', icon: Calendar, label: 'Meetups' },
-    { id: 'inbox', icon: MessageCircle, label: 'Inbox' },
-    { id: 'profile', icon: User, label: 'Profile' },
+    { id: 'inbox', icon: MessageCircle, label: 'Messaggi' },
+    { id: 'profile', icon: User, label: 'Profilo' },
   ];
 
   return (
