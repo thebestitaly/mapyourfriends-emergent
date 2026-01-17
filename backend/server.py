@@ -4,9 +4,12 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
 import httpx
 import uuid
 import os
+
+load_dotenv()
 
 app = FastAPI(title="Map Your Friends API")
 
@@ -21,7 +24,7 @@ app.add_middleware(
 
 # MongoDB connection
 MONGO_URL = os.environ.get("MONGO_URL")
-DB_NAME = os.environ.get("DB_NAME")
+DB_NAME = os.environ.get("DB_NAME", "map_your_friends")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
