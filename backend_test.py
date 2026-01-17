@@ -224,8 +224,8 @@ class MapYourFriendsAPITester:
         return self.run_test("Delete Imported Friend", "DELETE", f"api/imported-friends/{self.imported_friend_id}", 200)
 
 def main():
-    print("🚀 Starting Map Your Friends API Tests")
-    print("=" * 50)
+    print("🚀 Starting Map Your Friends API Tests (CSV Import Feature)")
+    print("=" * 60)
     
     # Setup
     tester = MapYourFriendsAPITester()
@@ -250,9 +250,20 @@ def main():
     # CRUD operations
     tester.test_profile_update()
     tester.test_create_meetup()
+    
+    print("\n📋 Running CSV Import Feature Tests...")
+    
+    # CSV Import feature tests
+    tester.test_imported_friends_list()
+    tester.test_imported_friends_map()
+    tester.test_geocode_single_city()
+    tester.test_csv_import()
+    tester.test_update_imported_friend()
+    tester.test_geocode_imported_friend()
+    tester.test_delete_imported_friend()
 
     # Print results
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print(f"📊 Test Results: {tester.tests_passed}/{tester.tests_run} passed")
     
     if tester.failed_tests:
