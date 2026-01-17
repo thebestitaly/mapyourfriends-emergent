@@ -438,6 +438,8 @@ export default function Dashboard({ user, setUser }) {
                     setActiveView('map');
                   } else if (item.id === 'profile') {
                     setShowProfileModal(true);
+                  } else if (item.id === 'import') {
+                    setShowImportModal(true);
                   } else {
                     setActiveView(item.id);
                     setTravelMode(false);
@@ -447,7 +449,9 @@ export default function Dashboard({ user, setUser }) {
                 className={`relative p-3 rounded-full transition-all duration-300 group ${
                   (activeView === item.id || (item.id === 'travel' && travelMode))
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/30'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/80'
+                    : item.id === 'import' 
+                      ? 'text-pink-500 hover:text-pink-600 hover:bg-pink-50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/80'
                 }`}
               >
                 <item.icon className="w-5 h-5" />
