@@ -805,7 +805,7 @@ export default function Dashboard({ user, setUser }) {
       </AnimatePresence>
 
       {/* Profile Modal */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showProfileModal && (
           <ProfileModal 
             user={user} 
@@ -816,7 +816,7 @@ export default function Dashboard({ user, setUser }) {
       </AnimatePresence>
 
       {/* Meetup Modal */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showMeetupModal && (
           <MeetupModal
             onClose={() => setShowMeetupModal(false)}
