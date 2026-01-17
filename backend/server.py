@@ -491,6 +491,50 @@ async def get_imported_friends(user: dict = Depends(get_current_user)):
     ).to_list(1000)
     return friends
 
+@app.post("/api/imported-friends")
+async def add_imported_friend(friend: ImportedFriendCreate, user: dict = Depends(get_current_user)):
+    """Add a single friend manually with automatic geocoding"""
+    # Geocode the city if coordinates not provided
+    if friend.city_lat is None or friend.city_lng is None:
+        geo_result = await geocode_city(friend.city)
+        city_lat = geo_result["lat"]
+        city_lng = geo_result["lng"]
+        geocode_status = geo_result["status"]
+        display_name = geo_result["display_name"]
+    else:
+        city_lat = friend.city_lat
+        city_lng = friend.city_lng
+        geocode_status = "manual"
+        display_name = friend.city
+    
+    friend_id = f"imported_{uuid.uuid4().hex[:12]}"
+    friend_data = {
+        "friend_id": friend_id,
+        "owner_id": user["user_id"],
+        "first_name": friend.first_name.strip(),
+        "last_name": friend.last_name.strip() if friend.last_name else "",
+        "city": friend.city.strip(),
+        "city_lat": city_lat,
+        "city_lng": city_lng,
+        "display_name": display_name,
+        "geocode_status": geocode_status,
+        "email": friend.email.strip() if friend.email else None,
+        "phone": friend.phone.strip() if friend.phone else None,
+        "photo": friend.photo,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.imported_friends.insert_one(friend_data)
+    
+    return {
+        "friend_id": friend_id,
+        "name": f"{friend.first_name} {friend.last_name or ''}".strip(),
+        "city": friend.city,
+        "lat": city_lat,
+        "lng": city_lng,
+        "geocode_status": geocode_status
+    }
+
 @app.get("/api/imported-friends/map")
 async def get_imported_friends_for_map(user: dict = Depends(get_current_user)):
     """Get imported friends with location data for map"""
