@@ -649,9 +649,21 @@ export default function Dashboard({ user, setUser }) {
                   {/* Friends List */}
                   {activeView === 'friends' && (
                     <>
+                      {/* Add Friend Button */}
+                      <button
+                        onClick={() => setShowAddFriendModal(true)}
+                        data-testid="add-friend-manual-btn"
+                        className="w-full p-4 rounded-2xl border-2 border-dashed border-pink-200 
+                                   text-pink-500 hover:border-pink-400 hover:text-pink-600 hover:bg-pink-50
+                                   transition-colors flex items-center justify-center gap-2 mb-4"
+                      >
+                        <Plus className="w-5 h-5" />
+                        Aggiungi Amico
+                      </button>
+
                       {friendRequests.length > 0 && (
                         <div className="mb-4">
-                          <p className="text-sm font-medium text-slate-500 mb-2">Friend Requests</p>
+                          <p className="text-sm font-medium text-slate-500 mb-2">Richieste di amicizia</p>
                           {friendRequests.map((req) => (
                             <div key={req.friendship_id} className="bg-white rounded-2xl p-4 mb-2 shadow-sm">
                               <div className="flex items-center gap-3">
@@ -675,17 +687,67 @@ export default function Dashboard({ user, setUser }) {
                           ))}
                         </div>
                       )}
+
+                      {/* Imported Friends Section */}
+                      {importedFriends.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-slate-500 mb-2">Amici Importati ({importedFriends.length})</p>
+                          {importedFriends.slice(0, 5).map((friend) => (
+                            <div
+                              key={friend.friend_id}
+                              onClick={() => {
+                                setSelectedImportedFriend(friend);
+                                if (friend.lat && friend.lng) {
+                                  setMapCenter([friend.lat, friend.lng]);
+                                  setMapZoom(8);
+                                }
+                                setActiveView('map');
+                              }}
+                              data-testid={`imported-friend-item-${friend.friend_id}`}
+                              className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-4 mb-2 shadow-sm 
+                                         hover:shadow-md transition-shadow cursor-pointer border border-pink-100"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 
+                                                flex items-center justify-center">
+                                  <span className="text-white font-bold">{friend.name?.charAt(0)}</span>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-slate-800">{friend.name}</p>
+                                  <p className="text-sm text-slate-500 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" />
+                                    {friend.city}
+                                  </p>
+                                </div>
+                                <ChevronRight className="w-5 h-5 text-pink-400" />
+                              </div>
+                            </div>
+                          ))}
+                          {importedFriends.length > 5 && (
+                            <button
+                              onClick={() => setFilter('imported')}
+                              className="w-full text-center text-sm text-pink-600 font-medium py-2 hover:text-pink-700"
+                            >
+                              Vedi tutti ({importedFriends.length})
+                            </button>
+                          )}
+                        </div>
+                      )}
                       
-                      {friends.length === 0 ? (
+                      {/* Registered Friends */}
+                      {friends.length > 0 && (
+                        <p className="text-sm font-medium text-slate-500 mb-2">Amici Registrati ({friends.length})</p>
+                      )}
+                      {friends.length === 0 && importedFriends.length === 0 ? (
                         <div className="text-center py-12">
                           <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                          <p className="text-slate-500">No friends yet</p>
+                          <p className="text-slate-500">Nessun amico ancora</p>
                           <button
                             onClick={() => setShowSearchModal(true)}
-                            data-testid="add-friends-btn"
+                            data-testid="search-friends-btn"
                             className="mt-3 text-cyan-600 font-medium hover:text-cyan-700"
                           >
-                            Add friends
+                            Cerca utenti
                           </button>
                         </div>
                       ) : (
