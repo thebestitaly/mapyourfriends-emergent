@@ -125,6 +125,104 @@ class MapYourFriendsAPITester:
         """Test friend requests endpoint"""
         return self.run_test("Get Friend Requests", "GET", "api/friends/requests", 200)
 
+    def test_imported_friends_list(self):
+        """Test imported friends list endpoint"""
+        return self.run_test("Get Imported Friends", "GET", "api/imported-friends", 200)
+
+    def test_imported_friends_map(self):
+        """Test imported friends map data endpoint"""
+        return self.run_test("Get Imported Friends Map", "GET", "api/imported-friends/map", 200)
+
+    def test_geocode_single_city(self):
+        """Test geocoding a single city"""
+        geocode_data = {"city": "Milano"}
+        return self.run_test("Geocode Single City", "POST", "api/geocode", 200, geocode_data)
+
+    def test_csv_import(self):
+        """Test CSV import functionality"""
+        # Create a simple CSV content for testing
+        csv_content = "Nome,Cognome,Città\nTest,User,Milano\nAnother,Friend,Roma"
+        
+        # We'll simulate a file upload by using requests with files parameter
+        url = f"{self.base_url}/api/imported-friends/csv"
+        headers = {'Authorization': f'Bearer {self.session_token}'}
+        
+        # Create a file-like object
+        files = {'file': ('test_friends.csv', csv_content, 'text/csv')}
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing CSV Import...")
+        print(f"   URL: {url}")
+        
+        try:
+            response = requests.post(url, headers=headers, files=files, timeout=15)
+            
+            success = response.status_code == 200
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                try:
+                    response_data = response.json()
+                    print(f"   Response: {str(response_data)[:200]}...")
+                    # Store first imported friend ID for later tests
+                    if response_data.get('imported') and len(response_data['imported']) > 0:
+                        self.imported_friend_id = response_data['imported'][0].get('friend_id')
+                except:
+                    print(f"   Response: {response.text[:200]}...")
+            else:
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                print(f"   Response: {response.text[:300]}")
+                self.failed_tests.append({
+                    'test': 'CSV Import',
+                    'endpoint': 'api/imported-friends/csv',
+                    'expected': 200,
+                    'actual': response.status_code,
+                    'response': response.text[:300]
+                })
+
+            return success, response.json() if success and response.text else {}
+
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.failed_tests.append({
+                'test': 'CSV Import',
+                'endpoint': 'api/imported-friends/csv',
+                'error': str(e)
+            })
+            return False, {}
+
+    def test_update_imported_friend(self):
+        """Test updating an imported friend"""
+        if not self.imported_friend_id:
+            print("⚠️  Skipping update test - no imported friend ID available")
+            return True, {}
+            
+        update_data = {
+            "first_name": "Updated",
+            "last_name": "Name",
+            "city": "Firenze",
+            "city_lat": 43.7696,
+            "city_lng": 11.2558,
+            "geocode_status": "manual"
+        }
+        return self.run_test("Update Imported Friend", "PUT", f"api/imported-friends/{self.imported_friend_id}", 200, update_data)
+
+    def test_geocode_imported_friend(self):
+        """Test re-geocoding an imported friend"""
+        if not self.imported_friend_id:
+            print("⚠️  Skipping geocode test - no imported friend ID available")
+            return True, {}
+            
+        return self.run_test("Geocode Imported Friend", "POST", f"api/imported-friends/{self.imported_friend_id}/geocode", 200)
+
+    def test_delete_imported_friend(self):
+        """Test deleting an imported friend"""
+        if not self.imported_friend_id:
+            print("⚠️  Skipping delete test - no imported friend ID available")
+            return True, {}
+            
+        return self.run_test("Delete Imported Friend", "DELETE", f"api/imported-friends/{self.imported_friend_id}", 200)
+
 def main():
     print("🚀 Starting Map Your Friends API Tests")
     print("=" * 50)
