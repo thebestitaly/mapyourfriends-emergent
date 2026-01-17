@@ -371,6 +371,219 @@ async def remove_friend(friend_id: str, user: dict = Depends(get_current_user)):
     })
     return {"message": "Friend removed"}
 
+# ============== GEOCODING HELPER ==============
+
+async def geocode_city(city_name: str) -> dict:
+    """Geocode a city name using OpenStreetMap Nominatim API"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": city_name,
+                    "format": "json",
+                    "limit": 1,
+                    "addressdetails": 1
+                },
+                headers={"User-Agent": "MapYourFriends/1.0"}
+            )
+            if response.status_code == 200:
+                results = response.json()
+                if results:
+                    result = results[0]
+                    return {
+                        "lat": float(result["lat"]),
+                        "lng": float(result["lon"]),
+                        "display_name": result.get("display_name", city_name),
+                        "status": "success"
+                    }
+            return {"lat": None, "lng": None, "display_name": city_name, "status": "failed"}
+    except Exception as e:
+        print(f"Geocoding error: {e}")
+        return {"lat": None, "lng": None, "display_name": city_name, "status": "failed"}
+
+# ============== IMPORTED FRIENDS ENDPOINTS ==============
+
+@app.post("/api/imported-friends/csv")
+async def import_friends_csv(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Import friends from CSV file with geocoding"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+    
+    content = await file.read()
+    try:
+        # Try different encodings
+        try:
+            text_content = content.decode('utf-8')
+        except UnicodeDecodeError:
+            text_content = content.decode('latin-1')
+        
+        csv_reader = csv.DictReader(io.StringIO(text_content))
+        
+        imported = []
+        failed = []
+        
+        for row in csv_reader:
+            # Handle different column name variations
+            first_name = row.get('Nome') or row.get('nome') or row.get('First Name') or row.get('first_name') or ''
+            last_name = row.get('Cognome') or row.get('cognome') or row.get('Last Name') or row.get('last_name') or ''
+            city = row.get('Città') or row.get('citta') or row.get('City') or row.get('city') or ''
+            email = row.get('Email') or row.get('email') or None
+            phone = row.get('Telefono') or row.get('telefono') or row.get('Phone') or row.get('phone') or None
+            
+            if not first_name or not city:
+                failed.append({
+                    "row": row,
+                    "error": "Missing required fields (Nome/First Name and Città/City)"
+                })
+                continue
+            
+            # Geocode the city
+            geo_result = await geocode_city(city)
+            
+            # Small delay to respect Nominatim rate limits
+            await asyncio.sleep(0.5)
+            
+            friend_id = f"imported_{uuid.uuid4().hex[:12]}"
+            friend_data = {
+                "friend_id": friend_id,
+                "owner_id": user["user_id"],
+                "first_name": first_name.strip(),
+                "last_name": last_name.strip() if last_name else "",
+                "city": city.strip(),
+                "city_lat": geo_result["lat"],
+                "city_lng": geo_result["lng"],
+                "display_name": geo_result["display_name"],
+                "geocode_status": geo_result["status"],
+                "email": email.strip() if email else None,
+                "phone": phone.strip() if phone else None,
+                "photo": None,
+                "created_at": datetime.now(timezone.utc)
+            }
+            
+            await db.imported_friends.insert_one(friend_data)
+            imported.append({
+                "friend_id": friend_id,
+                "name": f"{first_name} {last_name}".strip(),
+                "city": city,
+                "lat": geo_result["lat"],
+                "lng": geo_result["lng"],
+                "geocode_status": geo_result["status"]
+            })
+        
+        return {
+            "message": f"Imported {len(imported)} friends",
+            "imported": imported,
+            "failed": failed,
+            "total_imported": len(imported),
+            "total_failed": len(failed)
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error parsing CSV: {str(e)}")
+
+@app.get("/api/imported-friends")
+async def get_imported_friends(user: dict = Depends(get_current_user)):
+    """Get all imported friends for current user"""
+    friends = await db.imported_friends.find(
+        {"owner_id": user["user_id"]},
+        {"_id": 0}
+    ).to_list(1000)
+    return friends
+
+@app.get("/api/imported-friends/map")
+async def get_imported_friends_for_map(user: dict = Depends(get_current_user)):
+    """Get imported friends with location data for map"""
+    friends = await db.imported_friends.find(
+        {"owner_id": user["user_id"], "city_lat": {"$ne": None}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    map_data = []
+    for friend in friends:
+        map_data.append({
+            "friend_id": friend["friend_id"],
+            "name": f"{friend['first_name']} {friend.get('last_name', '')}".strip(),
+            "city": friend["city"],
+            "lat": friend["city_lat"],
+            "lng": friend["city_lng"],
+            "email": friend.get("email"),
+            "phone": friend.get("phone"),
+            "photo": friend.get("photo"),
+            "geocode_status": friend.get("geocode_status", "success"),
+            "marker_type": "imported"
+        })
+    return map_data
+
+@app.put("/api/imported-friends/{friend_id}")
+async def update_imported_friend(friend_id: str, update: ImportedFriendUpdate, user: dict = Depends(get_current_user)):
+    """Update an imported friend (including manual position)"""
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    
+    if update_data:
+        result = await db.imported_friends.update_one(
+            {"friend_id": friend_id, "owner_id": user["user_id"]},
+            {"$set": update_data}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Friend not found")
+    
+    friend = await db.imported_friends.find_one(
+        {"friend_id": friend_id, "owner_id": user["user_id"]},
+        {"_id": 0}
+    )
+    return friend
+
+@app.post("/api/imported-friends/{friend_id}/geocode")
+async def geocode_imported_friend(friend_id: str, user: dict = Depends(get_current_user)):
+    """Re-geocode a specific imported friend"""
+    friend = await db.imported_friends.find_one(
+        {"friend_id": friend_id, "owner_id": user["user_id"]},
+        {"_id": 0}
+    )
+    if not friend:
+        raise HTTPException(status_code=404, detail="Friend not found")
+    
+    geo_result = await geocode_city(friend["city"])
+    
+    await db.imported_friends.update_one(
+        {"friend_id": friend_id},
+        {"$set": {
+            "city_lat": geo_result["lat"],
+            "city_lng": geo_result["lng"],
+            "display_name": geo_result["display_name"],
+            "geocode_status": geo_result["status"]
+        }}
+    )
+    
+    return {
+        "friend_id": friend_id,
+        "lat": geo_result["lat"],
+        "lng": geo_result["lng"],
+        "geocode_status": geo_result["status"]
+    }
+
+@app.delete("/api/imported-friends/{friend_id}")
+async def delete_imported_friend(friend_id: str, user: dict = Depends(get_current_user)):
+    """Delete an imported friend"""
+    result = await db.imported_friends.delete_one(
+        {"friend_id": friend_id, "owner_id": user["user_id"]}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Friend not found")
+    return {"message": "Friend deleted"}
+
+@app.post("/api/geocode")
+async def geocode_single_city(request: Request, user: dict = Depends(get_current_user)):
+    """Geocode a single city name"""
+    data = await request.json()
+    city_name = data.get("city")
+    if not city_name:
+        raise HTTPException(status_code=400, detail="City name required")
+    
+    result = await geocode_city(city_name)
+    return result
+
 # ============== MEETUPS ENDPOINTS ==============
 
 @app.post("/api/meetups")
