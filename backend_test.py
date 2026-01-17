@@ -5,11 +5,12 @@ from datetime import datetime
 class MapYourFriendsAPITester:
     def __init__(self, base_url="https://4cea9e88-03fa-4c67-8b2c-1a33b29e9e56.preview.emergentagent.com"):
         self.base_url = base_url
-        self.session_token = "test_session_1768641236368"  # From MongoDB setup
-        self.test_user_id = "test-user-1768641236368"
+        self.session_token = "test_session_main_123"  # Updated session token
+        self.test_user_id = "test-user-main"
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
+        self.imported_friend_id = None
 
     def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
         """Run a single API test"""
