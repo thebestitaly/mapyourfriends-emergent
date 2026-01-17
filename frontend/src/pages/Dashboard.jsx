@@ -241,7 +241,7 @@ export default function Dashboard({ user, setUser }) {
   };
 
   // Filter map friends
-244|  const filteredMapFriends = mapFriends.filter(friend => {
+  const filteredMapFriends = mapFriends.filter(friend => {
     if (filter === 'all') return true;
     if (filter === 'active') return friend.marker_type === 'active';
     if (filter === 'competent') return friend.marker_type === 'competent';
