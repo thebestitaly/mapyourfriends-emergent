@@ -349,38 +349,49 @@ export default function Dashboard({ user, setUser }) {
             </Marker>
           ))}
 
-          {/* Imported friend markers */}
-          {filteredImportedFriends.map((friend, idx) => (
-            <Marker
-              key={`imported-${friend.friend_id}-${idx}`}
-              position={[friend.lat, friend.lng]}
-              icon={createMarkerIcon('imported', friend.name?.charAt(0) || '?', friend.geocode_status)}
-              eventHandlers={{
-                click: () => setSelectedImportedFriend(friend)
-              }}
-            >
-              <Popup>
-                <div className="p-2 min-w-[180px]">
-                  <div className="flex items-center gap-2">
-                    <p className="font-heading font-semibold">{friend.name}</p>
-                    {friend.geocode_status === 'failed' && (
-                      <AlertCircle className="w-4 h-4 text-amber-500" />
+          {/* Imported friend markers with clustering */}
+          <MarkerClusterGroup
+            chunkedLoading
+            iconCreateFunction={createClusterCustomIcon}
+            maxClusterRadius={60}
+            spiderfyOnMaxZoom={true}
+            showCoverageOnHover={false}
+            zoomToBoundsOnClick={true}
+            disableClusteringAtZoom={12}
+            animate={true}
+          >
+            {filteredImportedFriends.map((friend, idx) => (
+              <Marker
+                key={`imported-${friend.friend_id}-${idx}`}
+                position={[friend.lat, friend.lng]}
+                icon={createMarkerIcon('imported', friend.name?.charAt(0) || '?', friend.geocode_status)}
+                eventHandlers={{
+                  click: () => setSelectedImportedFriend(friend)
+                }}
+              >
+                <Popup>
+                  <div className="p-2 min-w-[180px]">
+                    <div className="flex items-center gap-2">
+                      <p className="font-heading font-semibold">{friend.name}</p>
+                      {friend.geocode_status === 'failed' && (
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500">{friend.city}</p>
+                    {friend.email && (
+                      <p className="text-xs text-slate-400 mt-1">{friend.email}</p>
                     )}
+                    {friend.phone && (
+                      <p className="text-xs text-slate-400">{friend.phone}</p>
+                    )}
+                    <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs">
+                      Importato
+                    </span>
                   </div>
-                  <p className="text-sm text-slate-500">{friend.city}</p>
-                  {friend.email && (
-                    <p className="text-xs text-slate-400 mt-1">{friend.email}</p>
-                  )}
-                  {friend.phone && (
-                    <p className="text-xs text-slate-400">{friend.phone}</p>
-                  )}
-                  <span className="inline-block mt-2 px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs">
-                    Importato
-                  </span>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                </Popup>
+              </Marker>
+            ))}
+          </MarkerClusterGroup>
         </MapContainer>
       </div>
 
