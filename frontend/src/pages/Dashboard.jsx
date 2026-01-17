@@ -1088,6 +1088,19 @@ export default function Dashboard({ user, setUser }) {
           />
         )}
       </AnimatePresence>
+
+      {/* Add Friend Modal */}
+      <AnimatePresence mode="wait">
+        {showAddFriendModal && (
+          <AddFriendModal
+            onClose={() => setShowAddFriendModal(false)}
+            onAdded={() => {
+              fetchImportedFriends();
+              setShowAddFriendModal(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
