@@ -165,7 +165,8 @@ export default function Dashboard({ user, setUser }) {
     fetchMeetups();
     fetchInbox();
     fetchFriendRequests();
-  }, [fetchFriends, fetchMapFriends, fetchMeetups, fetchInbox, fetchFriendRequests]);
+    fetchImportedFriends();
+  }, [fetchFriends, fetchMapFriends, fetchMeetups, fetchInbox, fetchFriendRequests, fetchImportedFriends]);
 
   // Search users
   const handleSearch = async (q) => {
