@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -7,17 +7,32 @@ import { toast } from 'sonner';
 import { 
   Map, Plane, Users, Calendar, MessageCircle, User, 
   LogOut, Search, X, Plus, Check, MapPin, ChevronRight,
-  Globe2, Settings, Bell
+  Globe2, Settings, Bell, Upload, FileSpreadsheet, Edit3,
+  RefreshCw, Trash2, AlertCircle
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Custom marker icons
-const createMarkerIcon = (type, initial) => {
-  const bgClass = type === 'active' 
-    ? 'background: linear-gradient(135deg, #06B6D4, #3B82F6);' 
-    : 'background: transparent; border: 3px solid #06B6D4;';
-  const textColor = type === 'active' ? '#fff' : '#06B6D4';
+const createMarkerIcon = (type, initial, status = 'success') => {
+  let bgClass;
+  let textColor;
+  
+  if (type === 'imported') {
+    if (status === 'failed' || status === 'manual') {
+      bgClass = 'background: linear-gradient(135deg, #F59E0B, #EF4444);';
+      textColor = '#fff';
+    } else {
+      bgClass = 'background: linear-gradient(135deg, #EC4899, #A855F7);';
+      textColor = '#fff';
+    }
+  } else if (type === 'active') {
+    bgClass = 'background: linear-gradient(135deg, #06B6D4, #3B82F6);';
+    textColor = '#fff';
+  } else {
+    bgClass = 'background: transparent; border: 3px solid #06B6D4;';
+    textColor = '#06B6D4';
+  }
   
   return L.divIcon({
     className: 'custom-marker',
@@ -25,7 +40,7 @@ const createMarkerIcon = (type, initial) => {
       <div style="
         width: 40px; height: 40px; border-radius: 50%; ${bgClass}
         display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 14px rgba(6, 182, 212, ${type === 'active' ? '0.4' : '0.2'});
+        box-shadow: 0 4px 14px rgba(236, 72, 153, ${type === 'imported' ? '0.4' : '0.2'});
         border: 3px solid white; font-weight: 700; font-size: 14px;
         color: ${textColor}; font-family: 'Manrope', sans-serif;
       ">${initial}</div>
