@@ -727,16 +727,17 @@ export default function Dashboard({ user, setUser }) {
       </div>
 
       {/* Search Modal */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showSearchModal && (
           <motion.div
+            key="search-modal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4"
             onClick={() => setShowSearchModal(false)}
           >
-            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm"></div>
+            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm" onClick={() => setShowSearchModal(false)}></div>
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
