@@ -147,6 +147,18 @@ export default function Dashboard({ user, setUser }) {
     }
   }, []);
 
+  const fetchImportedFriends = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/imported-friends/map`, { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setImportedFriends(data);
+      }
+    } catch (error) {
+      console.error('Error fetching imported friends:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchFriends();
     fetchMapFriends();
