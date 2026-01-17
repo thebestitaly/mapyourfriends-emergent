@@ -82,6 +82,7 @@ export default function Dashboard({ user, setUser }) {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditImportedModal, setShowEditImportedModal] = useState(false);
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [filter, setFilter] = useState('all');
