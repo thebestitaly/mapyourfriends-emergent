@@ -76,6 +76,28 @@ class MessageCreate(BaseModel):
     content: str
     message_type: Optional[str] = "text"
 
+class ImportedFriendCreate(BaseModel):
+    first_name: str
+    last_name: str
+    city: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    photo: Optional[str] = None
+    city_lat: Optional[float] = None
+    city_lng: Optional[float] = None
+    geocode_status: Optional[str] = "pending"  # pending, success, failed, manual
+
+class ImportedFriendUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    city: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    photo: Optional[str] = None
+    city_lat: Optional[float] = None
+    city_lng: Optional[float] = None
+    geocode_status: Optional[str] = None
+
 # ============== AUTH HELPERS ==============
 
 async def get_current_user(request: Request) -> dict:
