@@ -9,6 +9,7 @@
 - **Backend:** FastAPI (Python) 
 - **Database:** MongoDB
 - **Auth:** Emergent-managed Google OAuth
+- **Geocoding:** OpenStreetMap Nominatim API
 
 ## Core Requirements (Static)
 1. **Map-first interface** - Full-screen map as the main canvas
@@ -18,11 +19,13 @@
 5. **Meetups** - Organize gatherings in any city
 6. **Simple Inbox** - Basic messaging without real-time chat
 7. **Profile management** - Bio, current city, availability tags
+8. **CSV Import** - Import friends from CSV with automatic geocoding
 
 ## User Personas
 1. **Traveler** - Uses Travel Mode to find connections before trips
 2. **Networker** - Manages friends across cities, tracks who knows what cities well
 3. **Host** - Creates meetups and invites friends visiting their city
+4. **Importer** - Imports existing contacts from spreadsheets
 
 ## What's Been Implemented ✅
 
@@ -38,43 +41,49 @@
 - ✅ Profile modal with bio, city, coordinates, availability
 - ✅ Search users functionality
 - ✅ Friend requests flow
-- ✅ Filter chips (All Cities, Living In, Knows Well)
+- ✅ Filter chips (Tutti, Vivono, Conoscono, Importati)
+
+### Jan 17, 2026 - CSV Import Feature
+- ✅ CSV upload modal with drag & drop UI
+- ✅ Automatic geocoding via OpenStreetMap Nominatim
+- ✅ Imported friends displayed with pink/purple markers
+- ✅ Edit imported friend modal
+- ✅ Manual position adjustment for failed geocodes
+- ✅ Re-geocode functionality
+- ✅ Delete imported friend
+- ✅ Support for: Nome, Cognome, Città, Email, Telefono
 
 ### Backend APIs
-- `/api/auth/session` - OAuth session exchange
-- `/api/auth/me` - Current user
-- `/api/auth/logout` - Logout
-- `/api/users/me` - Profile update
-- `/api/friends` - Friends list
-- `/api/friends/map` - Friends with location data
-- `/api/friends/request` - Send friend request
-- `/api/friends/requests` - Pending requests
-- `/api/friends/accept/{id}` - Accept request
-- `/api/meetups` - CRUD meetups
-- `/api/messages/inbox` - Inbox
-- `/api/search/users` - Search users
+- `/api/auth/*` - Authentication endpoints
+- `/api/users/me` - Profile management
+- `/api/friends/*` - Friends management
+- `/api/meetups/*` - Meetups CRUD
+- `/api/messages/*` - Messaging
+- `/api/search/users` - User search
+- `/api/imported-friends/*` - CSV imported friends CRUD
+- `/api/imported-friends/csv` - CSV upload with geocoding
+- `/api/geocode` - Single city geocoding
 
 ## Prioritized Backlog
 
 ### P0 - Critical (Next Sprint)
-- [ ] City autocomplete with geocoding API
-- [ ] Friend card "Ask Advice" sends message
-- [ ] Friend card "Request Intro" functionality
+- [ ] City autocomplete in profile/meetup forms
+- [ ] Photo upload for imported friends
 
 ### P1 - High Priority
 - [ ] Competent cities management in profile
 - [ ] Meetup invitations and RSVP
 - [ ] Message threading/conversations
-- [ ] Zoom to friend location on click
+- [ ] Bulk edit/delete for imported friends
 
 ### P2 - Nice to Have
-- [ ] Friend request notifications
+- [ ] Export friends to CSV
 - [ ] City-based meetup suggestions
-- [ ] Export network visualization
 - [ ] Dark mode toggle
+- [ ] Notification system
 
 ## Next Tasks
-1. Add geocoding for city search (OpenStreetMap Nominatim)
-2. Implement "Ask Advice" message flow
+1. Add city autocomplete with geocoding suggestions
+2. Implement photo upload for imported friends
 3. Add competent cities editor in profile
-4. Improve friend card interactions
+4. Bulk operations for imported friends
