@@ -474,21 +474,28 @@ export default function Dashboard({ user, setUser }) {
         </div>
 
         {/* Filter chips */}
-        <div className="absolute top-20 left-20 flex gap-2 pointer-events-auto">
-          {['all', 'active', 'competent'].map((f) => (
+        <div className="absolute top-20 left-20 flex gap-2 pointer-events-auto flex-wrap">
+          {['all', 'active', 'competent', 'imported'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               data-testid={`filter-${f}-btn`}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                 filter === f
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
+                  ? f === 'imported' 
+                    ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-md'
+                    : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
                   : 'glass-panel text-slate-600 hover:bg-white/90'
               }`}
             >
-              {f === 'all' ? 'All Cities' : f === 'active' ? 'Living In' : 'Knows Well'}
+              {f === 'all' ? 'Tutti' : f === 'active' ? 'Vivono' : f === 'competent' ? 'Conoscono' : 'Importati'}
             </button>
           ))}
+          {importedFriends.length > 0 && (
+            <span className="px-3 py-2 rounded-full text-xs font-medium bg-pink-100 text-pink-700">
+              {importedFriends.length} importati
+            </span>
+          )}
         </div>
 
         {/* Travel Mode Input */}
