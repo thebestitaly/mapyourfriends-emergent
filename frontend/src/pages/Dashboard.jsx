@@ -908,6 +908,123 @@ export default function Dashboard({ user, setUser }) {
           />
         )}
       </AnimatePresence>
+
+      {/* Import CSV Modal */}
+      <AnimatePresence mode="wait">
+        {showImportModal && (
+          <ImportCSVModal
+            onClose={() => setShowImportModal(false)}
+            onImported={() => {
+              fetchImportedFriends();
+              setShowImportModal(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Selected Imported Friend Card */}
+      <AnimatePresence>
+        {selectedImportedFriend && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-md pointer-events-auto z-20"
+          >
+            <div className="glass-panel rounded-3xl p-5 shadow-floating">
+              <button
+                onClick={() => setSelectedImportedFriend(null)}
+                data-testid="close-imported-card-btn"
+                className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+              
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 
+                                flex items-center justify-center border-3 border-white shadow-lg">
+                  {selectedImportedFriend.photo ? (
+                    <img src={selectedImportedFriend.photo} alt={selectedImportedFriend.name} className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xl font-bold">{selectedImportedFriend.name?.charAt(0)}</span>
+                  )}
+                </div>
+                
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading font-bold text-xl text-slate-800">{selectedImportedFriend.name}</h3>
+                    {selectedImportedFriend.geocode_status === 'failed' && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        Posizione da verificare
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-500 flex items-center gap-1.5 mt-0.5">
+                    <MapPin className="w-4 h-4" />
+                    {selectedImportedFriend.city}
+                  </p>
+                  {selectedImportedFriend.email && (
+                    <p className="text-sm text-slate-500 mt-1">{selectedImportedFriend.email}</p>
+                  )}
+                  {selectedImportedFriend.phone && (
+                    <p className="text-sm text-slate-500">{selectedImportedFriend.phone}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => {
+                    setShowEditImportedModal(true);
+                  }}
+                  data-testid="edit-imported-btn"
+                  className="flex-1 px-4 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-medium 
+                             shadow-md shadow-pink-500/25 hover:shadow-pink-500/40 transition-shadow flex items-center justify-center gap-2"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Modifica
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch(`${API_URL}/api/imported-friends/${selectedImportedFriend.friend_id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                      });
+                      toast.success('Amico eliminato');
+                      setSelectedImportedFriend(null);
+                      fetchImportedFriends();
+                    } catch (error) {
+                      toast.error('Errore durante l\'eliminazione');
+                    }
+                  }}
+                  data-testid="delete-imported-btn"
+                  className="px-4 py-2.5 rounded-full bg-white border border-red-200 
+                             text-red-600 font-medium hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Imported Friend Modal */}
+      <AnimatePresence mode="wait">
+        {showEditImportedModal && selectedImportedFriend && (
+          <EditImportedFriendModal
+            friend={selectedImportedFriend}
+            onClose={() => setShowEditImportedModal(false)}
+            onSaved={(updated) => {
+              setSelectedImportedFriend(updated);
+              setShowEditImportedModal(false);
+              fetchImportedFriends();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
