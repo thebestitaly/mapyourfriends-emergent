@@ -98,6 +98,55 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 14px rgba(6, 182, 212, 0.2);
 }
 
+/* Cluster marker styles */
+.custom-cluster-icon {
+  background: transparent !important;
+}
+
+.cluster-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #EC4899 0%, #A855F7 100%);
+  border: 4px solid white;
+  box-shadow: 0 6px 20px rgba(236, 72, 153, 0.5);
+  color: white;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cluster-marker:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 25px rgba(236, 72, 153, 0.6);
+}
+
+.cluster-marker.cluster-small {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.cluster-marker.cluster-medium {
+  width: 50px;
+  height: 50px;
+  font-size: 16px;
+}
+
+.cluster-marker.cluster-large {
+  width: 60px;
+  height: 60px;
+  font-size: 18px;
+}
+
+/* Cluster spiderfy animation */
+.leaflet-cluster-anim .leaflet-marker-icon, 
+.leaflet-cluster-anim .leaflet-marker-shadow {
+  transition: transform 0.3s ease-out, opacity 0.3s ease-in;
+}
+
 /* Leaflet overrides */
 .leaflet-container {
   background: #F8FAFC;
