@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -12,6 +13,29 @@ import {
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Custom cluster icon for imported friends
+const createClusterCustomIcon = (cluster) => {
+  const count = cluster.getChildCount();
+  let size = 'small';
+  let dimensions = 40;
+  
+  if (count >= 10) {
+    size = 'large';
+    dimensions = 60;
+  } else if (count >= 5) {
+    size = 'medium';
+    dimensions = 50;
+  }
+  
+  return L.divIcon({
+    html: `<div class="cluster-marker cluster-${size}">
+      <span>${count}</span>
+    </div>`,
+    className: 'custom-cluster-icon',
+    iconSize: L.point(dimensions, dimensions, true),
+  });
+};
 
 // Custom marker icons
 const createMarkerIcon = (type, initial, status = 'success') => {
