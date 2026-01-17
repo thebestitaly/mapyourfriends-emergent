@@ -67,10 +67,12 @@ export default function Dashboard({ user, setUser }) {
   const [activeView, setActiveView] = useState('map');
   const [friends, setFriends] = useState([]);
   const [mapFriends, setMapFriends] = useState([]);
+  const [importedFriends, setImportedFriends] = useState([]);
   const [meetups, setMeetups] = useState([]);
   const [inbox, setInbox] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [selectedFriend, setSelectedFriend] = useState(null);
+  const [selectedImportedFriend, setSelectedImportedFriend] = useState(null);
   const [mapCenter, setMapCenter] = useState([20, 0]);
   const [mapZoom, setMapZoom] = useState(2);
   const [travelMode, setTravelMode] = useState(false);
@@ -78,6 +80,8 @@ export default function Dashboard({ user, setUser }) {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMeetupModal, setShowMeetupModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showEditImportedModal, setShowEditImportedModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [filter, setFilter] = useState('all');
