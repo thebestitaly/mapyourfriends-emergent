@@ -3,7 +3,7 @@ FROM node:18-alpine as frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 COPY frontend/ ./
 # Set backend URL to empty string for relative paths (same origin)
