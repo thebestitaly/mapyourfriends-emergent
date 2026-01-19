@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from authlib.integrations.starlette_client import OAuth
@@ -990,6 +992,28 @@ async def get_friends_for_map_with_groups(user: dict = Depends(get_current_user)
 async def health():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+# ============== STATIC FILES (Production) ==============
+
+# Ensure the static directory exists or handle it gracefully
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=os.path.join(STATIC_DIR, "static")), name="static")
+
+    @app.get("/{full_path:path}")
+    async def catch_all(full_path: str):
+        # Allow API calls to pass through
+        if full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        
+        # Check if file exists in static root (like favicon.ico, manifest.json)
+        file_path = os.path.join(STATIC_DIR, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+            
+        # Default to index.html for SPA routing
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+    if __name__ == "__main__":
+        import uvicorn
+        uvicorn.run(app, host="0.0.0.0", port=8001)
