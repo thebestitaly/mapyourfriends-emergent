@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from authlib.integrations.starlette_client import OAuth
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
@@ -11,15 +13,20 @@ import os
 import csv
 import io
 import asyncio
+import json
 
 load_dotenv()
 
 app = FastAPI(title="Map Your Friends API")
 
+# Session Middleware for OAuth
+SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-change-in-prod")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=7*24*60*60, https_only=os.environ.get("NODE_ENV") == "production")
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"], # In production, set this to your frontend domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,9 +34,24 @@ app.add_middleware(
 
 # MongoDB connection
 MONGO_URL = os.environ.get("MONGO_URL")
+if not MONGO_URL:
+    print("WARNING: MONGO_URL not set. Database features will fail.")
+
 DB_NAME = os.environ.get("DB_NAME", "map_your_friends")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+
+# OAuth Setup
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
 # ============== MODELS ==============
 
@@ -98,71 +120,81 @@ class ImportedFriendUpdate(BaseModel):
     city_lng: Optional[float] = None
     geocode_status: Optional[str] = None
 
+class GroupCreate(BaseModel):
+    name: str
+    color: Optional[str] = "#EC4899"  # Default pink
+    icon: Optional[str] = None
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+class GroupMemberAdd(BaseModel):
+    member_id: str
+    member_type: str  # "user" or "imported"
+
 # ============== AUTH HELPERS ==============
 
 async def get_current_user(request: Request) -> dict:
-    """Get current user from session token"""
-    session_token = request.cookies.get("session_token")
-    if not session_token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            session_token = auth_header.split(" ")[1]
+    """Get current user from session"""
+    user_info = request.session.get('user')
     
-    if not session_token:
+    if not user_info:
+        # Check Authorization header (for backward compatibility or native apps)
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        # Here we would handle Bearer tokens if we implemented them separately
+        # For now, we rely on the session
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    session = await db.user_sessions.find_one(
-        {"session_token": session_token},
-        {"_id": 0}
-    )
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    expires_at = session.get("expires_at")
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    
     user = await db.users.find_one(
-        {"user_id": session["user_id"]},
+        {"user_id": user_info["user_id"]},
         {"_id": 0}
     )
     if not user:
+        # Session exists but user not in DB (deleted?), force logout
+        request.session.pop('user', None)
         raise HTTPException(status_code=401, detail="User not found")
     
     return user
 
 # ============== AUTH ENDPOINTS ==============
 
-@app.post("/api/auth/session")
-async def create_session(request: Request, response: Response):
-    """Exchange session_id for session_token"""
-    data = await request.json()
-    session_id = data.get("session_id")
+@app.get("/api/auth/login")
+async def login(request: Request):
+    """Redirect to Google for Login"""
+    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", str(request.url_for('auth_callback')))
+    # Ensure https on production if behind proxy
+    if os.environ.get("NODE_ENV") == "production" and redirect_uri.startswith("http://"):
+         redirect_uri = redirect_uri.replace("http://", "https://", 1)
+         
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get("/api/auth/callback")
+async def auth_callback(request: Request):
+    """Handle Callback from Google"""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth Error: {str(e)}")
+        
+    user_info = token.get('userinfo')
+    if not user_info:
+         user_info = await oauth.google.userinfo(token=token)
+
+    email = user_info.get("email")
+    name = user_info.get("name")
+    picture = user_info.get("picture")
     
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
-    
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id}
-        )
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session_id")
-        auth_data = resp.json()
-    
-    email = auth_data.get("email")
-    name = auth_data.get("name")
-    picture = auth_data.get("picture")
-    session_token = auth_data.get("session_token")
-    
+    # Allow existing users to login, create new if not exists
     existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+    
     if existing_user:
         user_id = existing_user["user_id"]
+        # Update info
         await db.users.update_one(
             {"email": email},
             {"$set": {"name": name, "picture": picture}}
@@ -183,27 +215,16 @@ async def create_session(request: Request, response: Response):
             "created_at": datetime.now(timezone.utc)
         })
     
-    await db.user_sessions.delete_many({"user_id": user_id})
-    await db.user_sessions.insert_one({
+    # Set session
+    request.session['user'] = {
         "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-        "created_at": datetime.now(timezone.utc)
-    })
+        "email": email,
+        "name": name
+    }
     
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
-        max_age=7 * 24 * 60 * 60
-    )
-    
-    return {"user": user, "session_token": session_token}
+    # Redirect to frontend dashboard
+    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3002")
+    return Response(status_code=302, headers={"Location": f"{frontend_url}/dashboard"})
 
 @app.get("/api/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
@@ -211,12 +232,9 @@ async def get_me(user: dict = Depends(get_current_user)):
     return user
 
 @app.post("/api/auth/logout")
-async def logout(request: Request, response: Response):
+async def logout(request: Request):
     """Logout user"""
-    session_token = request.cookies.get("session_token")
-    if session_token:
-        await db.user_sessions.delete_one({"session_token": session_token})
-    response.delete_cookie(key="session_token", path="/")
+    request.session.pop('user', None)
     return {"message": "Logged out"}
 
 # ============== USER ENDPOINTS ==============
@@ -752,6 +770,219 @@ async def search_users(q: str, user: dict = Depends(get_current_user)):
         {"_id": 0}
     ).to_list(20)
     return users
+
+# ============== GROUP ENDPOINTS ==============
+
+@app.post("/api/groups")
+async def create_group(group: GroupCreate, user: dict = Depends(get_current_user)):
+    """Create a new group"""
+    # Check max groups limit
+    existing_count = await db.groups.count_documents({"owner_id": user["user_id"]})
+    if existing_count >= 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 groups allowed")
+    
+    group_id = f"group_{uuid.uuid4().hex[:12]}"
+    await db.groups.insert_one({
+        "group_id": group_id,
+        "owner_id": user["user_id"],
+        "name": group.name,
+        "color": group.color,
+        "icon": group.icon,
+        "member_ids": [],
+        "imported_member_ids": [],
+        "created_at": datetime.now(timezone.utc)
+    })
+    return {"message": "Group created", "group_id": group_id}
+
+
+@app.get("/api/groups")
+async def get_groups(user: dict = Depends(get_current_user)):
+    """Get all groups for current user"""
+    groups = await db.groups.find(
+        {"owner_id": user["user_id"]},
+        {"_id": 0}
+    ).to_list(100)
+    return groups
+
+
+@app.get("/api/groups/{group_id}")
+async def get_group(group_id: str, user: dict = Depends(get_current_user)):
+    """Get a specific group"""
+    group = await db.groups.find_one(
+        {"group_id": group_id, "owner_id": user["user_id"]},
+        {"_id": 0}
+    )
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return group
+
+
+@app.put("/api/groups/{group_id}")
+async def update_group(group_id: str, update: GroupUpdate, user: dict = Depends(get_current_user)):
+    """Update a group"""
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        result = await db.groups.update_one(
+            {"group_id": group_id, "owner_id": user["user_id"]},
+            {"$set": update_data}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Group not found")
+    
+    group = await db.groups.find_one(
+        {"group_id": group_id, "owner_id": user["user_id"]},
+        {"_id": 0}
+    )
+    return group
+
+
+@app.delete("/api/groups/{group_id}")
+async def delete_group(group_id: str, user: dict = Depends(get_current_user)):
+    """Delete a group (does NOT delete members)"""
+    result = await db.groups.delete_one(
+        {"group_id": group_id, "owner_id": user["user_id"]}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"message": "Group deleted"}
+
+
+@app.post("/api/groups/{group_id}/members")
+async def add_group_member(group_id: str, member: GroupMemberAdd, user: dict = Depends(get_current_user)):
+    """Add a member to a group"""
+    group = await db.groups.find_one(
+        {"group_id": group_id, "owner_id": user["user_id"]}
+    )
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    if member.member_type == "user":
+        # Verify it's a friend
+        friendship = await db.friendships.find_one({
+            "$or": [
+                {"user_id": user["user_id"], "friend_id": member.member_id, "status": "accepted"},
+                {"user_id": member.member_id, "friend_id": user["user_id"], "status": "accepted"}
+            ]
+        })
+        if not friendship:
+            raise HTTPException(status_code=400, detail="User is not a friend")
+        
+        await db.groups.update_one(
+            {"group_id": group_id},
+            {"$addToSet": {"member_ids": member.member_id}}
+        )
+    elif member.member_type == "imported":
+        # Verify ownership
+        imported = await db.imported_friends.find_one({
+            "friend_id": member.member_id,
+            "owner_id": user["user_id"]
+        })
+        if not imported:
+            raise HTTPException(status_code=400, detail="Imported friend not found")
+        
+        await db.groups.update_one(
+            {"group_id": group_id},
+            {"$addToSet": {"imported_member_ids": member.member_id}}
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid member_type")
+    
+    return {"message": "Member added to group"}
+
+
+@app.delete("/api/groups/{group_id}/members/{member_id}")
+async def remove_group_member(group_id: str, member_id: str, user: dict = Depends(get_current_user)):
+    """Remove a member from a group"""
+    result = await db.groups.update_one(
+        {"group_id": group_id, "owner_id": user["user_id"]},
+        {
+            "$pull": {
+                "member_ids": member_id,
+                "imported_member_ids": member_id
+            }
+        }
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"message": "Member removed from group"}
+
+
+@app.get("/api/friends/map/grouped")
+async def get_friends_for_map_with_groups(user: dict = Depends(get_current_user)):
+    """Get friends with location and group info for map"""
+    # Get all groups
+    groups = await db.groups.find(
+        {"owner_id": user["user_id"]},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Create lookup dictionaries
+    user_groups = {}  # user_id -> [group_info]
+    imported_groups = {}  # friend_id -> [group_info]
+    
+    for group in groups:
+        group_info = {
+            "group_id": group["group_id"],
+            "name": group["name"],
+            "color": group["color"]
+        }
+        for uid in group.get("member_ids", []):
+            if uid not in user_groups:
+                user_groups[uid] = []
+            user_groups[uid].append(group_info)
+        
+        for fid in group.get("imported_member_ids", []):
+            if fid not in imported_groups:
+                imported_groups[fid] = []
+            imported_groups[fid].append(group_info)
+    
+    # Get regular map data
+    friends = await get_friends(user)
+    map_data = []
+    
+    for friend in friends:
+        if friend.get("active_city_lat") and friend.get("active_city_lng"):
+            friend_groups = user_groups.get(friend["user_id"], [])
+            map_data.append({
+                "user_id": friend["user_id"],
+                "name": friend["name"],
+                "picture": friend.get("picture"),
+                "bio": friend.get("bio"),
+                "active_city": friend.get("active_city"),
+                "lat": friend["active_city_lat"],
+                "lng": friend["active_city_lng"],
+                "competent_cities": friend.get("competent_cities", []),
+                "availability": friend.get("availability", []),
+                "marker_type": "active",
+                "groups": friend_groups,
+                "marker_color": friend_groups[0]["color"] if friend_groups else None
+            })
+    
+    # Add imported friends
+    imported = await db.imported_friends.find(
+        {"owner_id": user["user_id"], "city_lat": {"$ne": None}},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    for friend in imported:
+        friend_groups = imported_groups.get(friend["friend_id"], [])
+        map_data.append({
+            "friend_id": friend["friend_id"],
+            "name": f"{friend['first_name']} {friend.get('last_name', '')}".strip(),
+            "city": friend["city"],
+            "lat": friend["city_lat"],
+            "lng": friend["city_lng"],
+            "email": friend.get("email"),
+            "phone": friend.get("phone"),
+            "photo": friend.get("photo"),
+            "geocode_status": friend.get("geocode_status", "success"),
+            "marker_type": "imported",
+            "groups": friend_groups,
+            "marker_color": friend_groups[0]["color"] if friend_groups else None
+        })
+    
+    return map_data
+
 
 # ============== HEALTH CHECK ==============
 

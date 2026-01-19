@@ -6,8 +6,9 @@ import { Map, Users, Plane, Calendar, Globe2, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   const handleLogin = () => {
-    const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    // Redirect to backend Google OAuth endpoint
+    const backendUrl = process.env.REACT_APP_BACKEND_URL;
+    window.location.href = `${backendUrl}/api/auth/login`;
   };
 
   const features = [

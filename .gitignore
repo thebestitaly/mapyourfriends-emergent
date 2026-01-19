@@ -1,4 +1,28 @@
--e 
 # Environment files
 *.env
 *.env.*
+.env
+.env.local
+
+# Dependencies
+node_modules/
+**/node_modules/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+frontend/build/
+
+# IDE and System
+.DS_Store
+.idea/
+.vscode/
+
+# Project specific
+.tmp/
+credentials.json
+token.json
