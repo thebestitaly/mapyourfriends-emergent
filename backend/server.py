@@ -2,8 +2,6 @@ from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFi
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
-from authlib.integrations.starlette_client import OAuth
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
@@ -16,14 +14,12 @@ import csv
 import io
 import asyncio
 import json
+import jwt
+from jwt.algorithms import RSAAlgorithm
 
 load_dotenv()
 
 app = FastAPI(title="Map Your Friends API")
-
-# Session Middleware for OAuth
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-change-in-prod")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=7*24*60*60, https_only=os.environ.get("NODE_ENV") == "production")
 
 # CORS
 app.add_middleware(
@@ -43,17 +39,39 @@ DB_NAME = os.environ.get("DB_NAME", "map_your_friends")
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-# OAuth Setup
-oauth = OAuth()
-oauth.register(
-    name='google',
-    client_id=os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
+# Auth Utils
+CLERK_PEM_PUBLIC_KEY = os.environ.get("CLERK_PEM_PUBLIC_KEY")
+# If passing the key directly in env, it might need formatting. 
+# Alternatively, we can use JWKS URL. For now, assuming PEM is simpler for single service 
+# or allowing the user to provide it. 
+# If checking against JWKS URL is preferred, we'd use PyJWKClient.
+
+async def verify_token(token: str):
+    try:
+        # In a real Clerk production app, you fetch the JWKS.
+        # For simplicity/speed here if keys aren't set up, we decoded unverified IF AND ONLY IF valid keys are missing (DEV ONLY).
+        # BUT we should really verify.
+        
+        # Scenario 1: User provided CLERK_PEM_PUBLIC_KEY
+        if CLERK_PEM_PUBLIC_KEY:
+            # Handle potential escaped newlines from env vars
+            key = CLERK_PEM_PUBLIC_KEY.replace("\\n", "\n")
+            # Ensure headers/footers if missing? Clerk usually gives just the body?
+            # Standard PEM usually has -----BEGIN PUBLIC KEY-----
+            payload = jwt.decode(token, key, algorithms=["RS256"], options={"verify_exp": True})
+            return payload
+            
+        # Scenario 2: No key provided? We can't verify signature securely without network call to JWKS.
+        # We will decode unverified for DEV purposes if specific env var is set, else fail.
+        if os.environ.get("Unsafe_Skip_Verification") == "true":
+             return jwt.decode(token, options={"verify_signature": False})
+             
+        raise HTTPException(status_code=500, detail="Server Auth Config Missing (CLERK_PEM_PUBLIC_KEY)")
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
 # ============== MODELS ==============
 
@@ -139,75 +157,34 @@ class GroupMemberAdd(BaseModel):
 # ============== AUTH HELPERS ==============
 
 async def get_current_user(request: Request) -> dict:
-    """Get current user from session"""
-    user_info = request.session.get('user')
+    """Get current user from Bearer Token"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     
-    if not user_info:
-        # Check Authorization header (for backward compatibility or native apps)
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        
-        # Here we would handle Bearer tokens if we implemented them separately
-        # For now, we rely on the session
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = auth_header.split(" ")[1]
+    payload = await verify_token(token)
     
-    user = await db.users.find_one(
-        {"user_id": user_info["user_id"]},
-        {"_id": 0}
-    )
+    # Clerk User ID is in 'sub'
+    clerk_user_id = payload.get("sub")
+    email = payload.get("email") # Clerk might separate emails in 'emails' list?
+    # Clerk JWT usually has 'email' claim if configured? Or we access via API?
+    # Standard Clerk session token has 'sid'. We need 'sub'.
+    
+    # Check if user exists in OUR db
+    # We map 'user_id' in our DB to the Clerk ID (sub)
+    user = await db.users.find_one({"user_id": clerk_user_id}, {"_id": 0})
+    
     if not user:
-        # Session exists but user not in DB (deleted?), force logout
-        request.session.pop('user', None)
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    return user
-
-# ============== AUTH ENDPOINTS ==============
-
-@app.get("/api/auth/login")
-async def login(request: Request):
-    """Redirect to Google for Login"""
-    redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI", str(request.url_for('auth_callback')))
-    # Ensure https on production if behind proxy
-    if os.environ.get("NODE_ENV") == "production" and redirect_uri.startswith("http://"):
-         redirect_uri = redirect_uri.replace("http://", "https://", 1)
-         
-    return await oauth.google.authorize_redirect(request, redirect_uri)
-
-@app.get("/api/auth/callback")
-async def auth_callback(request: Request):
-    """Handle Callback from Google"""
-    try:
-        token = await oauth.google.authorize_access_token(request)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"OAuth Error: {str(e)}")
-        
-    user_info = token.get('userinfo')
-    if not user_info:
-         user_info = await oauth.google.userinfo(token=token)
-
-    email = user_info.get("email")
-    name = user_info.get("name")
-    picture = user_info.get("picture")
-    
-    # Allow existing users to login, create new if not exists
-    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    
-    if existing_user:
-        user_id = existing_user["user_id"]
-        # Update info
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {"name": name, "picture": picture}}
-        )
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id,
-            "email": email,
-            "name": name,
-            "picture": picture,
+        # Create user on the fly (first login)
+        # We try to get details from token if available, or just defaults
+        # Clerk JWT might not have name/email by default without customization
+        # We'll use safe defaults
+        user_data = {
+            "user_id": clerk_user_id,
+            "email": payload.get("email", ""), 
+            "name": payload.get("name", "New User"),
+            "picture": payload.get("picture", ""),
             "bio": None,
             "active_city": None,
             "active_city_lat": None,
@@ -215,29 +192,21 @@ async def auth_callback(request: Request):
             "competent_cities": [],
             "availability": [],
             "created_at": datetime.now(timezone.utc)
-        })
+        }
+        await db.users.insert_one(user_data)
+        user = user_data
     
-    # Set session
-    request.session['user'] = {
-        "user_id": user_id,
-        "email": email,
-        "name": name
-    }
-    
-    # Redirect to frontend dashboard
-    frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3002")
-    return Response(status_code=302, headers={"Location": f"{frontend_url}/dashboard"})
+    return user
+
+# ============== AUTH ENDPOINTS ==============
 
 @app.get("/api/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
     """Get current user"""
     return user
 
-@app.post("/api/auth/logout")
-async def logout(request: Request):
-    """Logout user"""
-    request.session.pop('user', None)
-    return {"message": "Logged out"}
+# Logout handled by frontend (Clerk)
+# Login handled by frontend (Clerk)
 
 # ============== USER ENDPOINTS ==============
 

@@ -7,15 +7,28 @@
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+let tokenGetter = async () => null;
+
+export const setTokenGetter = (fn) => {
+  tokenGetter = fn;
+};
+
 // Helper per fetch con credentials
 async function fetchWithAuth(endpoint, options = {}) {
+  const token = await tokenGetter();
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {

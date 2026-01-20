@@ -1,57 +1,49 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Toaster, toast } from 'sonner';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn, useAuth } from "@clerk/clerk-react";
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
+import api, { setTokenGetter } from './services/api';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const clerkPubKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
 
-// REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
+if (!clerkPubKey) {
+  console.warn("Missing REACT_APP_CLERK_PUBLISHABLE_KEY");
+}
 
-// AuthCallback removed - standard OAuth callback handled by backend setting cookie
+function AuthSynchronizer() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setTokenGetter(getToken);
+  }, [getToken]);
+  return null;
+}
 
-function ProtectedRoute({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(null);
+function RequireAppUser({ children }) {
   const [user, setUser] = useState(null);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // If user data passed in state (e.g. optimizing navigation), use it
-    if (location.state?.user) {
-      setUser(location.state.user);
-      setIsAuthenticated(true);
-      return;
-    }
-
-    const checkAuth = async () => {
+    const loadUser = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/auth/me`, {
-          credentials: 'include'
-        });
-
-        if (!response.ok) {
-          throw new Error('Not authenticated');
-        }
-
-        const userData = await response.json();
+        const userData = await api.auth.getMe();
         setUser(userData);
-        setIsAuthenticated(true);
-      } catch (error) {
-        setIsAuthenticated(false);
-        navigate('/');
+      } catch (err) {
+        console.error("Failed to load user data", err);
+      } finally {
+        setLoading(false);
       }
     };
+    loadUser();
+  }, []);
 
-    checkAuth();
-  }, [navigate, location.state]);
-
-  if (isAuthenticated === null) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="glass-panel rounded-3xl p-8 text-center">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground font-body">Loading...</p>
+          <p className="text-muted-foreground font-body">Loading Profile...</p>
         </div>
       </div>
     );
@@ -61,18 +53,32 @@ function ProtectedRoute({ children }) {
 }
 
 function AppRouter() {
+  const navigate = useNavigate();
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      navigate={(to) => navigate(to)}
+    >
+      <AuthSynchronizer />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <>
+              <SignedIn>
+                <RequireAppUser>
+                  <Dashboard />
+                </RequireAppUser>
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn afterSignInUrl="/dashboard" />
+              </SignedOut>
+            </>
+          }
+        />
+      </Routes>
+    </ClerkProvider>
   );
 }
 

@@ -5,7 +5,7 @@ import { Plane } from 'lucide-react';
 // Hooks
 import useFriends from '../hooks/useFriends';
 import useMap from '../hooks/useMap';
-import { authApi } from '../services/api';
+import api from '../services/api';
 
 // Components
 import MapView from '../components/Map/MapView';
@@ -86,7 +86,7 @@ export default function Dashboard({ user, setUser }) {
   // Logout
   const handleLogout = async () => {
     try {
-      await authApi.logout();
+      await api.auth.logout();
       window.location.href = '/';
     } catch (e) {
       window.location.href = '/';
@@ -112,16 +112,20 @@ export default function Dashboard({ user, setUser }) {
   // Temporary fetch logic until moved to hooks
   // I'll put this inside useEffect
   useEffect(() => {
-    // Fetch meetups
-    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meetups`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then(setMeetups).catch(console.error);
-
-    // Fetch inbox
-    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/messages/inbox`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : [])
-      .then(setInbox).catch(console.error);
-  }, []);
+    const fetchData = async () => {
+      try {
+        const [meetupsData, inboxData] = await Promise.all([
+          api.meetups.getAll().catch(() => []),
+          api.messages.getInbox().catch(() => [])
+        ]);
+        setMeetups(meetupsData);
+        setInbox(inboxData);
+      } catch (error) {
+        console.error("Dashboard data fetch error:", error);
+      }
+    };
+    fetchData();
+  }, [refreshAll]);
 
   return (
     <div className="h-screen w-screen overflow-hidden relative bg-slate-50">
@@ -233,10 +237,8 @@ export default function Dashboard({ user, setUser }) {
         onDelete={async (friend) => {
           try {
             // Should use API here properly
-            await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/imported-friends/${friend.friend_id}`, {
-              method: 'DELETE',
-              credentials: 'include'
-            });
+            // Should use API here properly
+            await api.importedFriends.delete(friend.friend_id);
             fetchImportedFriends();
             setSelectedImportedFriend(null);
           } catch (e) {
@@ -296,9 +298,10 @@ export default function Dashboard({ user, setUser }) {
             onClose={() => setShowMeetupModal(false)}
             onCreated={() => {
               // re-fetch meetups
-              fetch(`${process.env.REACT_APP_BACKEND_URL}/api/meetups`, { credentials: 'include' })
-                .then(r => r.ok ? r.json() : [])
-                .then(setMeetups);
+              // re-fetch meetups
+              api.meetups.getAll()
+                .then(setMeetups)
+                .catch(() => setMeetups([]));
               setShowMeetupModal(false);
             }}
           />

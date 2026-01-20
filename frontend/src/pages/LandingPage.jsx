@@ -1,14 +1,15 @@
 import React from 'react';
+import { useClerk } from '@clerk/clerk-react';
 import { motion } from 'framer-motion';
 import { Map, Users, Plane, Calendar, Globe2, ArrowRight } from 'lucide-react';
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 
 export default function LandingPage() {
+  const clerk = useClerk();
+
   const handleLogin = () => {
-    // Redirect to backend Google OAuth endpoint
-    const backendUrl = process.env.REACT_APP_BACKEND_URL;
-    window.location.href = `${backendUrl}/api/auth/login`;
+    clerk.openSignIn();
   };
 
   const features = [
@@ -46,7 +47,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="relative z-10 px-6 py-6 md:px-12">
         <nav className="flex items-center justify-between max-w-7xl mx-auto">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
@@ -91,7 +92,7 @@ export default function LandingPage() {
                   <span className="gradient-text">through friendships</span>
                 </h1>
                 <p className="text-lg text-slate-600 max-w-xl leading-relaxed">
-                  Map Your Friends transforms your social network into a beautiful, 
+                  Map Your Friends transforms your social network into a beautiful,
                   spatial experience. Discover who you know in every corner of the world.
                 </p>
               </div>
@@ -114,7 +115,7 @@ export default function LandingPage() {
               <div className="flex items-center gap-6 pt-4">
                 <div className="flex -space-x-3">
                   {[1, 2, 3, 4].map((i) => (
-                    <div 
+                    <div
                       key={i}
                       className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 
                                  border-2 border-white shadow-sm flex items-center justify-center"
@@ -150,9 +151,9 @@ export default function LandingPage() {
                       <circle cx="300" cy="150" r="35" fill="#E0F2FE" />
                     </svg>
                   </div>
-                  
+
                   {/* Floating markers */}
-                  <motion.div 
+                  <motion.div
                     animate={{ y: [0, -8, 0] }}
                     transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
                     className="absolute top-1/4 left-1/4 w-12 h-12 rounded-full btn-gradient-primary 
@@ -160,8 +161,8 @@ export default function LandingPage() {
                   >
                     <span className="text-white text-sm font-bold">A</span>
                   </motion.div>
-                  
-                  <motion.div 
+
+                  <motion.div
                     animate={{ y: [0, -10, 0] }}
                     transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
                     className="absolute top-1/3 right-1/3 w-10 h-10 rounded-full btn-gradient-secondary 
@@ -169,8 +170,8 @@ export default function LandingPage() {
                   >
                     <span className="text-white text-sm font-bold">M</span>
                   </motion.div>
-                  
-                  <motion.div 
+
+                  <motion.div
                     animate={{ y: [0, -6, 0] }}
                     transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: 1 }}
                     className="absolute bottom-1/3 right-1/4 w-11 h-11 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 
